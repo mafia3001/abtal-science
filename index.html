@@ -48,6 +48,11 @@ button:focus-visible,summary:focus-visible{outline:3px solid var(--accent);outli
 .points{display:flex;align-items:center;gap:6px;background:var(--surface);border:2px solid var(--line);border-radius:999px;padding:4px 14px 4px 10px;font-family:var(--f-display);font-weight:700;font-size:1.15rem;white-space:nowrap}
 .points svg{width:22px;height:22px}
 .star{fill:var(--sun)}
+.tools{display:flex;justify-content:center;gap:8px;width:100%}
+.read-btn{background:var(--sky-soft);color:var(--sky);border:2px solid var(--sky);border-radius:999px;padding:6px 16px;font-family:var(--f-display);font-weight:700;font-size:1rem}
+.read-btn:active{transform:translateY(1px)}
+.icon-btn.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.note{font-size:.82rem;color:var(--muted);text-align:center;margin:0}
 .icon-btn{background:var(--surface);border:2px solid var(--line);border-radius:12px;padding:6px 12px;font-weight:600}
 .idea{background:var(--accent-soft);border-radius:16px;padding:12px 16px}
 .idea b{font-family:var(--f-display);font-size:1.05rem}
@@ -161,10 +166,13 @@ details.chap>.levels{padding:0 10px 12px}
     <div style="display:flex;flex-direction:column;gap:14px">
       <div class="bar">
         <button class="icon-btn" id="backBtn" type="button">→ الدروس</button>
+        <button class="icon-btn" id="autoBtn" type="button" aria-pressed="true">🔊 قراءة تلقائية</button>
         <div class="points"><svg viewBox="0 0 24 24"><path class="star" d="M12 2l2.9 6.2 6.8.8-5 4.6 1.4 6.7L12 17l-6.1 3.3 1.4-6.7-5-4.6 6.8-.8z"/></svg><span id="roundPts" class="num">٠</span></div>
       </div>
       <div class="prog"><div class="prog-track"><div class="prog-fill" id="progFill" style="width:0"></div></div><span id="progTxt"></span></div>
       <div class="card" id="taskCard">
+        <div class="tools"><button class="read-btn" id="readBtn" type="button">🔊 اقرأ السؤال</button></div>
+        <p class="note" id="voiceNote" hidden>لا يوجد صوت عربي على هذا الجهاز. جرّب جهازًا آخر أو حمّل صوتًا عربيًّا من إعدادات الجهاز.</p>
         <div class="task" id="taskTitle"></div>
         <div class="prompt" id="promptBox" hidden></div>
         <div id="answerBox" style="width:100%"></div>
@@ -595,6 +603,33 @@ const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(store))}catch(e){}};
 let ac=null;
 function tone(freqs,dur){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();let t=ac.currentTime;freqs.forEach(f=>{const o=ac.createOscillator(),g=ac.createGain();o.type='triangle';o.frequency.value=f;g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(.18,t+.02);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g).connect(ac.destination);o.start(t);o.stop(t+dur+.02);t+=dur*.8})}catch(e){}}
 
+/* ---------- speech ---------- */
+const TTS='speechSynthesis' in window&&'SpeechSynthesisUtterance' in window;
+let auto=true;try{auto=localStorage.getItem('abtal-science-auto')!=='0'}catch(e){}
+let voice=null;
+function pickVoice(){if(!TTS)return;const vs=speechSynthesis.getVoices();voice=vs.find(v=>/^ar([-_]SA)?$/i.test(v.lang))||vs.find(v=>/^ar/i.test(v.lang))||null}
+if(TTS){pickVoice();try{speechSynthesis.addEventListener('voiceschanged',pickVoice)}catch(e){speechSynthesis.onvoiceschanged=pickVoice}}
+const plain=h=>{const d=document.createElement('div');d.innerHTML=String(h==null?'':h);d.querySelectorAll('.pupa,svg').forEach(x=>x.remove());return d.textContent.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{2190}-\u{21FF}]/gu,' ').replace(/\s+/g,' ').trim()};
+function stopSpeak(){if(TTS)try{speechSynthesis.cancel()}catch(e){}}
+function speak(text,queue){
+  if(!TTS||!text)return;
+  try{if(!queue)speechSynthesis.cancel();
+    const u=new SpeechSynthesisUtterance(text);u.lang=voice?voice.lang:'ar-SA';if(voice)u.voice=voice;u.rate=.85;u.pitch=1.05;speechSynthesis.speak(u);
+  }catch(e){}
+}
+const ORD=['الأول','الثاني','الثالث','الرابع','الخامس','السادس'];
+function questionText(p){
+  const parts=[plain(p.q)];const sh=plain(p.show);if(sh)parts.push(sh);
+  if(p.t==='or')parts.push('رتّب هذه البطاقات: '+p.bank.map(i=>plain(p.items[i][1])).join('، ')+'.');
+  else parts.push('الخيارات: '+p.choices.map((c,i)=>`${ORD[i]}: ${plain(c)}`).join('. ')+'.');
+  return parts.join('. ').replace(/([:؟.،])\s*\./g,'$1').replace(/\.\s*\./g,'.');
+}
+function updateAuto(){const b=$('autoBtn');b.classList.toggle('on',auto);b.setAttribute('aria-pressed',auto);b.textContent=auto?'🔊 قراءة تلقائية':'🔇 قراءة تلقائية'}
+$('autoBtn').addEventListener('click',()=>{auto=!auto;try{localStorage.setItem('abtal-science-auto',auto?'1':'0')}catch(e){}updateAuto();if(auto&&S&&S.p&&!S.done)speak(questionText(S.p));else stopSpeak()});
+$('readBtn').addEventListener('click',()=>{if(!TTS||!S||!S.p)return;pickVoice();$('voiceNote').hidden=!!voice||!speechSynthesis.getVoices().length;speak(questionText(S.p))});
+if(!TTS){$('readBtn').hidden=true;$('autoBtn').hidden=true}
+updateAuto();
+
 /* ---------- home ---------- */
 let S=null;
 function show(id){['home','play','result'].forEach(s=>$(s).hidden=s!==id);window.scrollTo(0,0)}
@@ -634,6 +669,7 @@ function next(){
   $('fb').hidden=true;$('explainBox').hidden=true;$('nextArea').hidden=true;
   $('checkArea').hidden=p.t!=='or';
   drawAnswer();
+  if(auto)speak(questionText(p));
 }
 const itemHTML=it=>`<span class="em">${it[0]}</span><span>${it[1]}</span>`;
 function drawAnswer(marks){
@@ -677,11 +713,13 @@ function finish1(right,ansText){
     const f=$('fb');f.className='fb good';f.innerHTML=`${msg} <b class="num">+${ar(gain)}</b><small>${p.why||''}</small>`;f.hidden=false;
     card.classList.add('pop');tone([660,880],.12);
     $('nextArea').hidden=false;
+    if(auto)setTimeout(()=>speak('إجابة صحيحة. '+plain(p.why)),250);
   }else{
     S.streak=0;
     const f=$('fb');f.className='fb bad';f.innerHTML=ansText?`الإجابة الصحيحة هي: <b>${ansText}</b>`:'الترتيب الصحيح موضّح في الشرح.';f.hidden=false;
     card.classList.add('shake');tone([300,220],.16);
     openExplain();
+    if(auto)setTimeout(()=>speak((ansText?'الإجابة الصحيحة هي: '+plain(ansText)+'. ':'الترتيب الصحيح: '+p.items.map(it=>plain(it[1])).join('، ')+'. ')+plain(p.why)),250);
   }
   S.i++;
 }
@@ -693,7 +731,7 @@ function openExplain(){
   $('explainBox').hidden=false;$('nextArea').hidden=false;
   setTimeout(()=>$('explainBox').scrollIntoView({behavior:'smooth',block:'start'}),60);
 }
-$('nextBtn').addEventListener('click',()=>next());
+$('nextBtn').addEventListener('click',()=>{stopSpeak();next()});
 
 /* ---------- finish ---------- */
 function finish(){
@@ -709,8 +747,8 @@ function finish(){
   show('result');
 }
 $('againBtn').onclick=()=>start(S.lv);
-$('homeBtn').onclick=()=>{renderHome();show('home')};
-$('backBtn').onclick=()=>{renderHome();show('home')};
+$('homeBtn').onclick=()=>{stopSpeak();renderHome();show('home')};
+$('backBtn').onclick=()=>{stopSpeak();renderHome();show('home')};
 window.__T=()=>S;
 renderHome();
 })();
