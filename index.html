@@ -626,8 +626,8 @@ function questionText(p){
 }
 function updateAuto(){const b=$('autoBtn');b.classList.toggle('on',auto);b.setAttribute('aria-pressed',auto);b.textContent=auto?'🔊 قراءة تلقائية':'🔇 قراءة تلقائية'}
 $('autoBtn').addEventListener('click',()=>{auto=!auto;try{localStorage.setItem('abtal-science-auto',auto?'1':'0')}catch(e){}updateAuto();if(auto&&S&&S.p&&!S.done)speak(questionText(S.p));else stopSpeak()});
-$('readBtn').addEventListener('click',()=>{if(!TTS||!S||!S.p)return;pickVoice();$('voiceNote').hidden=!!voice||!speechSynthesis.getVoices().length;speak(questionText(S.p))});
-if(!TTS){$('readBtn').hidden=true;$('autoBtn').hidden=true}
+$('readBtn').addEventListener('click',()=>{if(!TTS){const n=$('voiceNote');n.innerHTML='القراءة الصوتية لا تعمل داخل هذه الصفحة. افتح التطبيق في متصفح كروم أو سفاري من الرابط:<br><b dir="ltr">mafia3001.github.io/abtal-science</b>';n.hidden=false;return}if(!S||!S.p)return;pickVoice();$('voiceNote').hidden=!!voice||!speechSynthesis.getVoices().length;speak(questionText(S.p))});
+if(!TTS){$('autoBtn').hidden=true}
 updateAuto();
 
 /* ---------- home ---------- */
